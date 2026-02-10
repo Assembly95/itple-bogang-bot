@@ -123,6 +123,16 @@ export default async function handler(req, res) {
     const { y, m, d, today } = kstTodayParts();
     const header = `📅 오늘 (${y}/${m}/${d}) 보강 일정`;
 
+if (req.query?.debug === "1") {
+  return res.status(200).json({
+    using_db_id: process.env.NOTION_DATABASE_ID,
+    using_channel: process.env.SLACK_CHANNEL_ID,
+    has_notion_token: !!process.env.NOTION_TOKEN,
+    has_slack_token: !!process.env.SLACK_BOT_TOKEN,
+  });
+}
+
+    
     // 1) DB 전체(또는 보강일 정렬된 것) 읽기
     const rows = await notionQueryAll(DB_ID, NOTION_TOKEN);
 
