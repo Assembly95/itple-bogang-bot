@@ -112,6 +112,14 @@ export default async function handler(req, res) {
         const student = getPeople(p, "학생");
         const teacher = getPeople(p, "보강T");
         const time = formatTimeKST(p.properties["보강일"].date);
+
+            // 🔍 디버깅
+    console.log("제목:", title);
+    console.log("학생:", student);
+    console.log("보강T:", teacher);
+    console.log("속성 목록:", Object.keys(p.properties));
+    console.log("---");
+        
         return `• 🕒 ${time} ${student} · ${title} (${teacher})`;
       })
       .filter(Boolean);
