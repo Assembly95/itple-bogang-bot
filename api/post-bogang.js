@@ -110,8 +110,9 @@ export default async function handler(req, res) {
       .map(p => {
         const title = getTitle(p);
         const student = getPeople(p, "학생");
+        const teacher = getPeople(p, "보강T");
         const time = formatTimeKST(p.properties["보강일"].date);
-        return `• 🕒 ${time} ${student} · ${title}`;
+        return `• 🕒 ${time} ${student} · ${title} (${teacher})`;
       })
       .filter(Boolean);
 
