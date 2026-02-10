@@ -1,5 +1,4 @@
-// api/post-bogang.js modify
-
+// api/post-bogang.js
 const NOTION_VERSION = "2022-06-28";
 
 function kstToday() {
@@ -13,7 +12,6 @@ function kstToday() {
 
 function formatTimeKST(dateObj) {
   if (!dateObj?.start) return "";
-
   const fmt = iso =>
     new Intl.DateTimeFormat("ko-KR", {
       timeZone: "Asia/Seoul",
@@ -21,7 +19,6 @@ function formatTimeKST(dateObj) {
       minute: "2-digit",
       hour12: true,
     }).format(new Date(iso));
-
   return dateObj.end
     ? `${fmt(dateObj.start)} ~ ${fmt(dateObj.end)}`
     : fmt(dateObj.start);
@@ -54,11 +51,22 @@ async function notionQuery(dbId, token) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        filter: {
+          property: "상태",
+          status: {
+            equals: "확정"
+          }
+        },
+        sorts: [
+          {
+            property: "보강일",
+            direction: "descending"
+          }
+        ],
         page_size: 100,
       }),
     }
   );
-
   const json = await resp.json();
   if (!resp.ok) {
     throw new Error(JSON.stringify(json));
@@ -75,7 +83,6 @@ async function postSlack(channel, token, text) {
     },
     body: JSON.stringify({ channel, text }),
   });
-
   const json = await resp.json();
   if (!json.ok) {
     throw new Error(JSON.stringify(json));
@@ -88,38 +95,14 @@ export default async function handler(req, res) {
     const DB_ID = process.env.NOTION_DATABASE_ID;
     const SLACK_TOKEN = process.env.SLACK_BOT_TOKEN;
     const CHANNEL = process.env.SLACK_CHANNEL_ID;
-    // 🔍 디버깅용 로그 추가
-    console.log("=== DEBUG ===");
-    console.log("NOTION_TOKEN exists:", !!NOTION_TOKEN);
-    console.log("NOTION_TOKEN length:", NOTION_TOKEN?.length);
-    console.log("NOTION_TOKEN first 10 chars:", NOTION_TOKEN?.substring(0, 10));
-    console.log("DB_ID:", DB_ID);
-    console.log("=============");
+
     const today = kstToday();
     const header = `📅 오늘 (${today}) 보강 일정`;
-
     const rows = await notionQuery(DB_ID, NOTION_TOKEN);
-    // 🔍 디버깅: 전체 데이터 확인
-    console.log("=== 전체 rows ===");
-    console.log("Total rows:", rows.length);
-    
-    rows.forEach((page, idx) => {
-      const status = page.properties?.["상태"]?.status?.name;
-      const dateObj = page.properties?.["보강일"]?.date;
-      const start = dateObj?.start;
-      const title = getTitle(page);
-      
-      console.log(`\n[${idx}] ${title}`);
-      console.log("  상태:", status);
-      console.log("  보강일 start:", start);
-      console.log("  필터 통과:", start?.startsWith(today) && status === "확정");
-    });
-    console.log("=================\n");
-    const todays = rows.filter(page => {
-      const status = page.properties?.["상태"]?.status?.name;
-      const start = page.properties?.["보강일"]?.date?.start;
 
-      if (!start || status !== "확정") return false;
+    const todays = rows.filter(page => {
+      const start = page.properties?.["보강일"]?.date?.start;
+      if (!start) return false;
       return start.startsWith(today);
     });
 
@@ -128,7 +111,6 @@ export default async function handler(req, res) {
         const title = getTitle(p);
         const student = getPeople(p, "학생");
         const time = formatTimeKST(p.properties["보강일"].date);
-
         return `• 🕒 ${time} ${student} · ${title}`;
       })
       .filter(Boolean);
@@ -138,7 +120,6 @@ export default async function handler(req, res) {
       : `${header}\n\n오늘 예정된 보강이 없습니다.`;
 
     await postSlack(CHANNEL, SLACK_TOKEN, text);
-
     res.status(200).json({ ok: true, count: lines.length });
   } catch (e) {
     res.status(500).json({
