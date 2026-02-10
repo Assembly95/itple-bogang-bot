@@ -1,0 +1,13 @@
+name: Bogang Daily Notice
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # 한국시간 13:00
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call API
+        run: curl -s https://itple-bogang-bot.vercel.app/api/post-bogang
