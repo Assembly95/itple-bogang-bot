@@ -85,7 +85,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           filter: {
             and: [
-              { property: "상태", select: { equals: "확정" } },
+              { property: "상태", status: { equals: "확정" } },
               {
                 property: "보강일",
                 date: { on_or_after: start, before: end },
