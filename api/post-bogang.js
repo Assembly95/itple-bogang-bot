@@ -1,7 +1,6 @@
 // api/post-bogang.js
 // Vercel Serverless Function
 
-import fetch from "node-fetch";
 
 const NOTION_VERSION = "2022-06-28";
 
