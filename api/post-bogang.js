@@ -99,7 +99,22 @@ export default async function handler(req, res) {
     const header = `📅 오늘 (${today}) 보강 일정`;
 
     const rows = await notionQuery(DB_ID, NOTION_TOKEN);
-
+    // 🔍 디버깅: 전체 데이터 확인
+    console.log("=== 전체 rows ===");
+    console.log("Total rows:", rows.length);
+    
+    rows.forEach((page, idx) => {
+      const status = page.properties?.["상태"]?.status?.name;
+      const dateObj = page.properties?.["보강일"]?.date;
+      const start = dateObj?.start;
+      const title = getTitle(page);
+      
+      console.log(`\n[${idx}] ${title}`);
+      console.log("  상태:", status);
+      console.log("  보강일 start:", start);
+      console.log("  필터 통과:", start?.startsWith(today) && status === "확정");
+    });
+    console.log("=================\n");
     const todays = rows.filter(page => {
       const status = page.properties?.["상태"]?.status?.name;
       const start = page.properties?.["보강일"]?.date?.start;
