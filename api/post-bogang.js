@@ -1,39 +1,24 @@
 // api/post-bogang.js
-// Vercel Serverless Function
-
+// Vercel Serverless Function (Node 18+ has built-in fetch)
 
 const NOTION_VERSION = "2022-06-28";
 
-function todayRangeKST() {
+function kstParts(date = new Date()) {
   const tz = "Asia/Seoul";
-  const now = new Date();
-
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(now);
+  }).formatToParts(date);
 
   const y = parts.find(p => p.type === "year").value;
   const m = parts.find(p => p.type === "month").value;
   const d = parts.find(p => p.type === "day").value;
-
-  const start = `${y}-${m}-${d}T00:00:00+09:00`;
-
-  const tomorrow = new Date(`${y}-${m}-${d}T00:00:00+09:00`);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const y2 = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric" }).format(tomorrow);
-  const m2 = new Intl.DateTimeFormat("en-CA", { timeZone: tz, month: "2-digit" }).format(tomorrow);
-  const d2 = new Intl.DateTimeFormat("en-CA", { timeZone: tz, day: "2-digit" }).format(tomorrow);
-
-  const end = `${y2}-${m2}-${d2}T00:00:00+09:00`;
-
-  return { start, end, y, m, d };
+  return { y, m, d, today: `${y}-${m}-${d}` };
 }
 
-function formatTime(dateObj) {
+function formatTimeKST(dateObj) {
   if (!dateObj?.start) return "";
 
   const fmt = iso =>
@@ -44,24 +29,67 @@ function formatTime(dateObj) {
       hour12: true,
     }).format(new Date(iso));
 
-  if (dateObj.end) return `${fmt(dateObj.start)} ~ ${fmt(dateObj.end)}`;
-  return fmt(dateObj.start);
+  return dateObj.end ? `${fmt(dateObj.start)} ~ ${fmt(dateObj.end)}` : fmt(dateObj.start);
 }
 
 function getTitle(page) {
-  const props = page.properties;
-  for (const key in props) {
+  const props = page.properties || {};
+  for (const key of Object.keys(props)) {
     if (props[key].type === "title") {
-      return props[key].title.map(t => t.plain_text).join("");
+      return (props[key].title || []).map(t => t.plain_text).join("").trim();
     }
   }
   return "";
 }
 
-function getPeople(page, name) {
-  const p = page.properties[name];
+function getPeople(page, propName) {
+  const p = page.properties?.[propName];
   if (!p || p.type !== "people") return "";
-  return p.people.map(x => x.name).join(", ");
+  return (p.people || []).map(x => x.name).join(", ").trim();
+}
+
+async function notionQuery(dbId, token) {
+  const resp = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json",
+    },
+    // ✅ 날짜 필터 빼고 상태만 필터링 (날짜는 코드에서 직접 처리)
+    body: JSON.stringify({
+      filter: {
+        property: "상태",
+        status: { equals: "확정" },
+      },
+      // 최신 일정이 위로 오도록 정렬(필요 없으면 빼도 됨)
+      sorts: [{ property: "보강일", direction: "ascending" }],
+      page_size: 100,
+    }),
+  });
+
+  const json = await resp.json();
+  if (!resp.ok) {
+    throw new Error(`Notion query failed: ${JSON.stringify(json)}`);
+  }
+  return json.results || [];
+}
+
+async function postToSlack(channel, token, text) {
+  const resp = await fetch("https://slack.com/api/chat.postMessage", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({ channel, text }),
+  });
+
+  const json = await resp.json();
+  if (!json.ok) {
+    throw new Error(`Slack post failed: ${JSON.stringify(json)}`);
+  }
+  return json;
 }
 
 export default async function handler(req, res) {
@@ -71,69 +99,57 @@ export default async function handler(req, res) {
     const SLACK_TOKEN = process.env.SLACK_BOT_TOKEN;
     const CHANNEL = process.env.SLACK_CHANNEL_ID;
 
-    const { start, end, y, m, d } = todayRangeKST();
-
-    const notionResp = await fetch(
-      `https://api.notion.com/v1/databases/${DB_ID}/query`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${NOTION_TOKEN}`,
-          "Notion-Version": NOTION_VERSION,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          filter: {
-            and: [
-              { property: "상태", status: { equals: "확정" } },
-              {
-                property: "보강일",
-                date: { equals: `${y}-${m}-${d}` },
-              },
-            ],
-          },
-          sorts: [{ property: "보강일", direction: "ascending" }],
-        }),
-      }
-    );
-
-    const notionData = await notionResp.json();
-    const rows = notionData.results || [];
-
-    const header = `📅 오늘 (${y}/${m}/${d}) 보강 일정`;
-
-    let lines = [];
-
-    for (const page of rows) {
-      const title = getTitle(page);
-      const student = getPeople(page, "학생");
-      const dateObj = page.properties["보강일"]?.date;
-
-      const time = formatTime(dateObj);
-
-      if (time)
-        lines.push(`• 🕒 ${time} ${student || ""} ${title || ""}`);
+    // env 체크
+    const missing = ["NOTION_TOKEN", "NOTION_DATABASE_ID", "SLACK_BOT_TOKEN", "SLACK_CHANNEL_ID"]
+      .filter(k => !process.env[k]);
+    if (missing.length) {
+      return res.status(400).json({ error: `Missing env vars: ${missing.join(", ")}` });
     }
 
-    const text =
-      lines.length > 0
-        ? `${header}\n\n${lines.join("\n")}`
-        : `${header}\n\n오늘 예정된 보강이 없습니다.`;
+    const { y, m, d, today } = kstParts();
+    const header = `📅 오늘 (${y}/${m}/${d}) 보강 일정`;
 
-    await fetch("https://slack.com/api/chat.postMessage", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SLACK_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        channel: CHANNEL,
-        text,
-      }),
+    // 1) 노션에서 확정된 일정 가져오기
+    const rows = await notionQuery(DB_ID, NOTION_TOKEN);
+
+    // 2) "오늘" 일정만 필터링 (range date도 start 기준으로 잡힘)
+    const todays = rows.filter(page => {
+      const start = page.properties?.["보강일"]?.date?.start;
+      if (!start) return false;
+      // start가 ISO이므로 앞부분 YYYY-MM-DD 비교
+      return String(start).startsWith(today);
     });
 
-    res.status(200).json({ ok: true });
+    // 3) 슬랙 메시지 구성
+    const lines = todays
+      .map(page => {
+        const title = getTitle(page);                // 예: 사과력/헬로메이플
+        const student = getPeople(page, "학생");     // 예: 이다원
+        const dateObj = page.properties?.["보강일"]?.date;
+        const time = formatTimeKST(dateObj);
+
+        if (!time) return null;
+
+        const who = student ? ` ${student}` : "";
+        const what = title ? ` · ${title}` : "";
+        return `• 🕒 ${time}${who}${what}`;
+      })
+      .filter(Boolean);
+
+    const text = lines.length
+      ? `${header}\n\n${lines.join("\n")}`
+      : `${header}\n\n오늘 예정된 보강이 없습니다.`;
+
+    // 4) 슬랙 전송
+    const slackResp = await postToSlack(CHANNEL, SLACK_TOKEN, text);
+
+    return res.status(200).json({
+      ok: true,
+      count_today: lines.length,
+      slack: { ts: slackResp.ts, channel: slackResp.channel },
+    });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    // 에러를 최대한 그대로 보여주기 (원인 파악용)
+    return res.status(500).json({ error: "INTERNAL_ERROR", detail: String(e) });
   }
 }
