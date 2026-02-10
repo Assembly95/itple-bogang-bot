@@ -88,7 +88,30 @@ async function postSlack(channel, token, text) {
     throw new Error(JSON.stringify(json));
   }
 }
-
+function getRollup(page, name) {
+  const p = page.properties?.[name];
+  if (!p || p.type !== "rollup") return "";
+  
+  // Rollup이 배열인 경우
+  if (p.rollup?.type === "array") {
+    return p.rollup.array
+      .map(item => {
+        // Title 타입
+        if (item.title) {
+          return item.title.map(t => t.plain_text).join("");
+        }
+        // Rich text 타입
+        if (item.rich_text) {
+          return item.rich_text.map(t => t.plain_text).join("");
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join(", ");
+  }
+  
+  return "";
+}
 export default async function handler(req, res) {
   try {
     const NOTION_TOKEN = process.env.NOTION_TOKEN;
@@ -108,10 +131,10 @@ export default async function handler(req, res) {
 
     const lines = todays
       .map(p => {
-        const title = getTitle(p);
-        const student = getPeople(p, "학생");
-        const teacher = getPeople(p, "보강T");
-        const time = formatTimeKST(p.properties["보강일"].date);
+    const title = getTitle(p);
+    const student = getRollup(p, "학생명") || "미정";  // 👈 변경!
+    const teacher = getRollup(p, "보강선생님명") || "미정";  // 👈 변경!
+    const time = formatTimeKST(p.properties["보강일"].date);
 
             // 🔍 디버깅
     console.log("제목:", title);
