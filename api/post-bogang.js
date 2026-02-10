@@ -88,7 +88,13 @@ export default async function handler(req, res) {
     const DB_ID = process.env.NOTION_DATABASE_ID;
     const SLACK_TOKEN = process.env.SLACK_BOT_TOKEN;
     const CHANNEL = process.env.SLACK_CHANNEL_ID;
-
+    // 🔍 디버깅용 로그 추가
+    console.log("=== DEBUG ===");
+    console.log("NOTION_TOKEN exists:", !!NOTION_TOKEN);
+    console.log("NOTION_TOKEN length:", NOTION_TOKEN?.length);
+    console.log("NOTION_TOKEN first 10 chars:", NOTION_TOKEN?.substring(0, 10));
+    console.log("DB_ID:", DB_ID);
+    console.log("=============");
     const today = kstToday();
     const header = `📅 오늘 (${today}) 보강 일정`;
 
