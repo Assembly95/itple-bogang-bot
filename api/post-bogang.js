@@ -158,6 +158,17 @@ if (req.query?.debug === "1") {
           ? formatDateKST(p.properties["보강일"].date.start)
           : null,
       }));
+
+      if (req.query?.debug === "2") {
+  const sample = rows.slice(0, 10).map(p => ({
+    title: getTitle(p),
+    status: getStatusName(p, "상태"),
+    bogangStart: p.properties?.["보강일"]?.date?.start || null,
+    bogangEnd: p.properties?.["보강일"]?.date?.end || null,
+    bogangStartDateKST: p.properties?.["보강일"]?.date?.start
+      ? formatDateKST(p.properties["보강일"].date.start)
+      : null,
+  }));
       return res.status(200).json({
         ok: true,
         today,
