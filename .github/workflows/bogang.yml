@@ -2,12 +2,18 @@ name: Bogang Daily Notice
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # 한국시간 13:00
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
+      - name: Debug time
+        run: |
+          echo "UTC now: $(date -u)"
+          echo "KST now: $(TZ=Asia/Seoul date)"
+
       - name: Call API
-        run: curl -s https://itple-bogang-bot.vercel.app/api/post-bogang
+        run: |
+          curl -fsS https://itple-bogang-bot.vercel.app/api/post-bogang | cat
