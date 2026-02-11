@@ -2,7 +2,7 @@ name: Bogang Daily Notice
 
 on:
   schedule:
-    - cron: "0 4  * * *"
+    - cron: "57 3  * * *"
   workflow_dispatch:
 
 jobs:
