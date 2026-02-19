@@ -1,45 +1,72 @@
-import { kstToday, formatTimeKST } from "./utils.js";
-
+// api/post-sangdam.js
 const NOTION_VERSION = "2022-06-28";
 
-async function notionQuery(dbId, token) {
-  const res = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      filter: {
-        and: [
-          {
-            property: "상태",
-            status: { equals: "예정" },
-          },
-        ],
-      },
-      sorts: [{ property: "날짜", direction: "ascending" }],
-    }),
-  });
-  const data = await res.json();
-  return data.results ?? [];
+function kstToday() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+function formatTimeKST(dateObj) {
+  if (!dateObj?.start) return "";
+  const fmt = iso =>
+    new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(iso));
+  return dateObj.end
+    ? `${fmt(dateObj.start)} ~ ${fmt(dateObj.end)}`
+    : fmt(dateObj.start);
 }
 
 function getTitle(page) {
-  const titleArr = page.properties?.["이름"]?.title;
-  if (!titleArr || titleArr.length === 0) return "(제목 없음)";
-  return titleArr.map((t) => t.plain_text).join("");
+  for (const key of Object.keys(page.properties || {})) {
+    const p = page.properties[key];
+    if (p.type === "title") {
+      return (p.title || []).map(t => t.plain_text).join("");
+    }
+  }
+  return "";
 }
 
 function getMultiSelect(page, propName) {
   const items = page.properties?.[propName]?.multi_select;
   if (!items || items.length === 0) return "";
-  return items.map((i) => i.name).join("/");
+  return items.map(i => i.name).join("/");
+}
+
+async function notionQuery(dbId, token) {
+  const resp = await fetch(
+    `https://api.notion.com/v1/databases/${dbId}/query`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        filter: {
+          property: "상태",
+          status: { equals: "예정" },
+        },
+        sorts: [{ property: "날짜", direction: "ascending" }],
+        page_size: 100,
+      }),
+    }
+  );
+  const json = await resp.json();
+  if (!resp.ok) throw new Error(JSON.stringify(json));
+  return json.results || [];
 }
 
 async function postSlack(channel, token, text) {
-  await fetch("https://slack.com/api/chat.postMessage", {
+  const resp = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -47,6 +74,8 @@ async function postSlack(channel, token, text) {
     },
     body: JSON.stringify({ channel, text }),
   });
+  const json = await resp.json();
+  if (!json.ok) throw new Error(JSON.stringify(json));
 }
 
 export default async function handler(req, res) {
@@ -60,14 +89,14 @@ export default async function handler(req, res) {
     const header = `📋 오늘 (${today}) 상담 일정`;
     const rows = await notionQuery(DB_ID, NOTION_TOKEN);
 
-    const todays = rows.filter((page) => {
-      const dateObj = page.properties?.["날짜"]?.date;
-      const start = dateObj?.start;
-      return start?.startsWith(today);
+    const todays = rows.filter(page => {
+      const start = page.properties?.["날짜"]?.date?.start;
+      if (!start) return false;
+      return start.startsWith(today);
     });
 
     const lines = todays
-      .map((p) => {
+      .map(p => {
         const title = getTitle(p);
         const type = getMultiSelect(p, "상담유형");
         const time = formatTimeKST(p.properties["날짜"].date);
