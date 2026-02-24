@@ -62,8 +62,10 @@ async function notionQuery(dbId, token) {
     },
     body: JSON.stringify({
       filter: {
-        property: "상태",
-        status: { equals: "확정" },
+  or: [
+    { property: "상태", status: { equals: "확정" } },
+    { property: "상태", status: { equals: "안내 완료" } },
+  ],
       },
       // 오늘 일정만 뽑을 거라면 ascending이 보통 더 보기 좋음
       sorts: [{ property: "보강일", direction: "ascending" }],
