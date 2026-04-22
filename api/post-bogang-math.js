@@ -105,8 +105,8 @@ async function postJandi(webhookUrl, text) {
 export default async function handler(req, res) {
   try {
     const NOTION_TOKEN = process.env.NOTION_TOKEN;
-    const DB_ID = process.env.NOTION_DATABASE_ID;
-    const JANDI_WEBHOOK_URL = process.env.JANDI_WEBHOOK_URL;
+    const DB_ID = process.env.NOTION_MATH_DATABASE_ID;
+    const JANDI_WEBHOOK_URL = process.env.JANDI_MATH_WEBHOOK_URL;
 
     if (!NOTION_TOKEN) throw new Error("ENV_MISSING: NOTION_TOKEN");
     if (!DB_ID) throw new Error("ENV_MISSING: NOTION_DATABASE_ID");
