@@ -108,9 +108,9 @@ export default async function handler(req, res) {
     const DB_ID = process.env.NOTION_MATH_DATABASE_ID;
     const JANDI_WEBHOOK_URL = process.env.JANDI_MATH_WEBHOOK_URL;
 
-    if (!NOTION_TOKEN) throw new Error("ENV_MISSING: NOTION_TOKEN");
-    if (!DB_ID) throw new Error("ENV_MISSING: NOTION_DATABASE_ID");
-    if (!JANDI_WEBHOOK_URL) throw new Error("ENV_MISSING: JANDI_WEBHOOK_URL");
+    if (!NOTION_TOKEN) throw new Error("ENV_MISSING: NOTION_MATH_TOKEN");
+    if (!DB_ID) throw new Error("ENV_MISSING: NOTION_MATH_DATABASE_ID");
+    if (!JANDI_WEBHOOK_URL) throw new Error("ENV_MISSING: JANDI_MATH_WEBHOOK_URL");
 
     const today = kstToday();
     const header = `📅 오늘 (${today}) 보강 일정`;
