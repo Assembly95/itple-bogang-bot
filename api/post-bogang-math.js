@@ -60,6 +60,12 @@ async function getDataSourceId(databaseId, token) {
       "Notion-Version": NOTION_VERSION,
     },
   });
+    const json = await resp.json();
+
+  console.log("🔥 DB 전체 응답:", JSON.stringify(json, null, 2));
+
+  return null; // 일부러 null
+}
 
   const json = await resp.json();
   if (!resp.ok) throw new Error(`DATABASE_RETRIEVE_FAILED: ${JSON.stringify(json)}`);
