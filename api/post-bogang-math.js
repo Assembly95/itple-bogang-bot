@@ -1,5 +1,5 @@
-// api/post-bogang.js
-const NOTION_VERSION = "2022-06-28";
+// api/post-bogang-math.js
+const NOTION_VERSION = "2025-09-03";
 
 /** YYYY-MM-DD (KST) */
 function kstToday() {
@@ -52,8 +52,36 @@ function getRollup(page, name) {
   return "";
 }
 
-async function notionQuery(dbId, token) {
-  const resp = await fetch(`https://api.notion.com/v1/data_sources/${dbId}/query`, {
+async function getDataSourceId(databaseId, token) {
+  const resp = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Notion-Version": NOTION_VERSION,
+    },
+  });
+
+  const json = await resp.json();
+  if (!resp.ok) throw new Error(`DATABASE_RETRIEVE_FAILED: ${JSON.stringify(json)}`);
+
+  console.log("database info:", JSON.stringify(json, null, 2));
+
+  const dataSourceId = json.data_sources?.[0]?.id;
+  if (!dataSourceId) {
+    throw new Error("DATA_SOURCE_ID_NOT_FOUND");
+  }
+
+  return dataSourceId;
+}
+
+async function notionQuery(databaseId, token) {
+  const envDataSourceId = process.env.NOTION_MATH_DATASOURCE_ID;
+
+  const dataSourceId = envDataSourceId || (await getDataSourceId(databaseId, token));
+
+  console.log("사용 dataSourceId:", dataSourceId);
+
+  const resp = await fetch(`https://api.notion.com/v1/data_sources/${dataSourceId}/query`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -62,27 +90,21 @@ async function notionQuery(dbId, token) {
     },
     body: JSON.stringify({
       filter: {
-  or: [
-    { property: "상태", status: { equals: "확정" } },
-    { property: "상태", status: { equals: "안내 완료" } },
-  ],
+        or: [
+          { property: "상태", status: { equals: "확정" } },
+          { property: "상태", status: { equals: "안내 완료" } },
+        ],
       },
-      // 오늘 일정만 뽑을 거라면 ascending이 보통 더 보기 좋음
       sorts: [{ property: "보강일", direction: "ascending" }],
       page_size: 100,
     }),
   });
 
   const json = await resp.json();
-  if (!resp.ok) throw new Error(JSON.stringify(json));
+  if (!resp.ok) throw new Error(`DATA_SOURCE_QUERY_FAILED: ${JSON.stringify(json)}`);
   return json.results || [];
 }
 
-/**
- * JANDI Incoming Webhook으로 메시지 전송
- * env: JANDI_WEBHOOK_URL
- * 참고: body 필드에 메시지 텍스트를 넣는 방식
- */
 async function postJandi(webhookUrl, text) {
   const resp = await fetch(webhookUrl, {
     method: "POST",
@@ -92,7 +114,6 @@ async function postJandi(webhookUrl, text) {
     },
     body: JSON.stringify({
       body: text,
-      // connectColor: "#3A7BFF", // 선택 옵션 (원하면 주석 해제)
     }),
   });
 
@@ -108,7 +129,7 @@ export default async function handler(req, res) {
     const DB_ID = process.env.NOTION_MATH_DATABASE_ID;
     const JANDI_WEBHOOK_URL = process.env.JANDI_MATH_WEBHOOK_URL;
 
-    if (!NOTION_TOKEN) throw new Error("ENV_MISSING: NOTION_MATH_TOKEN");
+    if (!NOTION_TOKEN) throw new Error("ENV_MISSING: NOTION_TOKEN");
     if (!DB_ID) throw new Error("ENV_MISSING: NOTION_MATH_DATABASE_ID");
     if (!JANDI_WEBHOOK_URL) throw new Error("ENV_MISSING: JANDI_MATH_WEBHOOK_URL");
 
@@ -129,7 +150,6 @@ export default async function handler(req, res) {
         const teacher = getRollup(p, "보강선생님명") || "미정";
         const time = formatTimeKST(p.properties?.["보강일"]?.date);
 
-        // 필요하면 Vercel 로그에서 디버깅 가능
         console.log("제목:", title);
         console.log("학생:", student);
         console.log("보강T:", teacher);
@@ -143,11 +163,11 @@ export default async function handler(req, res) {
 
     const text = lines.length
       ? `${header}\n\n${lines.join("\n")}`
-      : `${header}\n\n오늘 예정된 보강이 없습니다.`;
+      : `${header}\n\n오늘 예정된 수학 보강이 없습니다.`;
 
     await postJandi(JANDI_WEBHOOK_URL, text);
 
-    res.status(200).json({ ok: true, target: "jandi", count: lines.length });
+    res.status(200).json({ ok: true, target: "jandi-math", count: lines.length });
   } catch (e) {
     res.status(500).json({
       error: "FAILED",
