@@ -53,7 +53,7 @@ function getRollup(page, name) {
 }
 
 async function notionQuery(dbId, token) {
-  const resp = await fetch(`https://api.notion.com/v1/databases/${dbId}/query`, {
+  const resp = await fetch(`https://api.notion.com/v1/data_sources/${dbId}/query`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
