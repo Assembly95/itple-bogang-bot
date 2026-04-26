@@ -38,16 +38,24 @@ function getRollup(page, name) {
   const p = page.properties?.[name];
   if (!p || p.type !== "rollup") return "";
 
-  if (p.rollup?.type === "array") {
-    return p.rollup.array
+  const rollup = p.rollup;
+
+  if (rollup?.type === "array") {
+    return rollup.array
       .map((item) => {
         if (item.title) return item.title.map((t) => t.plain_text).join("");
         if (item.rich_text) return item.rich_text.map((t) => t.plain_text).join("");
+        if (item.people) return item.people.map((person) => person.name || "").filter(Boolean).join(", ");
+        if (item.name) return item.name;
         return "";
       })
       .filter(Boolean)
       .join(", ");
   }
+
+  if (rollup?.type === "string") return rollup.string || "";
+  if (rollup?.type === "number") return String(rollup.number ?? "");
+  if (rollup?.type === "date") return rollup.date?.start || "";
 
   return "";
 }
