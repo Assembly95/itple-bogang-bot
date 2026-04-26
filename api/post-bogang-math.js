@@ -165,6 +165,8 @@ export default async function handler(req, res) {
         console.log("제목:", title);
         console.log("학생:", student);
         console.log("보강T:", teacher);
+        console.log("학생명 rollup:", JSON.stringify(p.properties?.["학생명"], null, 2));
+        console.log("보강선생님명 rollup:", JSON.stringify(p.properties?.["보강선생님명"], null, 2));
         console.log("속성 목록:", Object.keys(p.properties || {}));
         console.log("---");
 
