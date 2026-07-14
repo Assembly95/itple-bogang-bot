@@ -65,6 +65,8 @@ async function getDataSourceId(databaseId, token) {
 
   const json = await resp.json();
 
+  console.log("DATABASE 응답:", JSON.stringify(json, null, 2));
+
   if (!resp.ok) {
     throw new Error(
       `DATABASE_RETRIEVE_FAILED: ${JSON.stringify(json)}`
@@ -74,7 +76,9 @@ async function getDataSourceId(databaseId, token) {
   const dataSourceId = json.data_sources?.[0]?.id;
 
   if (!dataSourceId) {
-    throw new Error("DATA_SOURCE_ID_NOT_FOUND");
+    throw new Error(
+      `DATA_SOURCE_ID_NOT_FOUND: ${JSON.stringify(json)}`
+    );
   }
 
   return dataSourceId;
