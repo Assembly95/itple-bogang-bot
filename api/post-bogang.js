@@ -126,7 +126,7 @@ export default async function handler(req, res) {
       .map((p) => {
         const title = getTitle(p);
         const student = getRollup(p, "학생명") || "미정";
-        const teacher = getRollup(p, "보강선생님명") || "미정";
+        const teacher = getRollup(p, "보강T") || "미정";
         const time = formatTimeKST(p.properties?.["보강일"]?.date);
 
         // 필요하면 Vercel 로그에서 디버깅 가능
