@@ -121,27 +121,67 @@ function getTitle(page) {
   return "";
 }
 
-// 롤업 속성 추출 (학생명, 보강선생님명)
-function getRollup(page, name) {
+function extractPropertyText(item) {
+  if (!item) return "";
+
+  if (item.title) {
+    return item.title.map(t => t.plain_text || "").join("");
+  }
+
+  if (item.rich_text) {
+    return item.rich_text.map(t => t.plain_text || "").join("");
+  }
+
+  if (item.rollup?.type === "array") {
+    return item.rollup.array
+      .map(extractPropertyText)
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  return "";
+}
+
+async function getRollup(page, name, token) {
   const p = getProperty(page, name);
-  if (!p || p.type !== "rollup") return "";
 
-  if (p.rollup?.type !== "array") return "";
+  if (!p) {
+    console.warn(`롤업 속성 없음: ${name}`);
+    return "";
+  }
 
-  return (p.rollup.array || [])
-    .map((item) => {
-      if (item.title) {
-        return item.title.map((t) => t.plain_text).join("");
-      }
-      if (item.rich_text) {
-        return item.rich_text
-          .map((t) => t.plain_text)
-          .join("");
-      }
-      return "";
-    })
+  if (p.type !== "rollup") {
+    console.warn(`롤업 타입 아님: ${name}, ${p.type}`);
+    return "";
+  }
+
+  // 일반 조회 결과에서 먼저 읽기
+  const direct = (p.rollup?.array || [])
+    .map(extractPropertyText)
     .filter(Boolean)
     .join(", ");
+
+  if (direct) return direct;
+
+  // 값이 비어 있으면 속성 전용 API로 재조회
+  try {
+    const data = await notionRequest(
+      `/pages/${page.id}/properties/${encodeURIComponent(p.id)}`,
+      token
+    );
+
+    const items = data.object === "list"
+      ? data.results || []
+      : [data];
+
+    return items
+      .map(extractPropertyText)
+      .filter(Boolean)
+      .join(", ");
+  } catch (err) {
+    console.error(`롤업 재조회 실패 (${name}):`, err);
+    return "";
+  }
 }
 
 // 노션 API 요청
@@ -172,10 +212,19 @@ const nameCache = new Map();
 async function getRelatedPageName(id, token) {
   if (!nameCache.has(id)) {
     const promise = notionRequest(`/pages/${id}`, token)
-      .then(getTitle)
+      .then((page) => {
+        const title = getTitle(page);
+
+        if (!title) {
+          throw new Error(`페이지 제목이 비어 있음: ${id}`);
+        }
+
+        return title;
+      })
       .catch((err) => {
+        nameCache.delete(id);
         console.error("관계형 페이지 조회 실패:", id, err);
-        return "";
+        throw err;
       });
 
     nameCache.set(id, promise);
@@ -254,31 +303,53 @@ async function notionQuery(subject, token, today) {
   });
 }
 
-// 일정 하나를 메시지용 문자열로 가공
 async function formatSchedule(page, subject, token) {
   const title = getTitle(page) || "제목 없음";
 
   const date = getProperty(page, subject.dateProperty)?.date;
   const time = formatTimeKST(date);
 
-// 학생명 롤업에서 이름을 직접 가져오기
-const student = getRollup(page, "학생명");
+  // 학생명: 롤업 우선
+  let student = await getRollup(page, "학생명", token);
 
-// 담당 선생님
-let teacher = getRollup(page, "보강선생님명");
+  // 코딩/수학: 롤업 실패 시 학생 페이지 제목 조회
+  if (!student && subject.name !== "영어") {
+    student = await getRelationNames(page, "학생", token);
+  }
 
-if (!teacher) {
-  teacher = await getRelationNames(page, "보강T", token);
-}
+  // 담당 선생님: 롤업 우선
+  let teacher = await getRollup(
+    page,
+    "보강선생님명",
+    token
+  );
 
+  // 롤업 실패 시 보강T 관계형 조회
+  if (!teacher) {
+    teacher = await getRelationNames(
+      page,
+      "보강T",
+      token
+    );
+  }
+
+  console.log(`[${subject.name}] 속성 확인`, {
+    studentRollup: getProperty(page, "학생명")?.type,
+    teacherRollup: getProperty(page, "보강선생님명")?.type,
+    studentRelationCount:
+      getProperty(page, "학생")?.relation?.length,
+    teacherRelationCount:
+      getProperty(page, "보강T")?.relation?.length,
+  });
+
+  student = student || "학생 미확인";
   teacher = teacher || "담당 미정";
 
-  // 영어는 제목 자체에 학생명이 들어 있음
   if (subject.name === "영어") {
     return `• ${time} | ${title} (${teacher})`;
   }
 
-  return `• ${time} | ${student || "학생 미확인"} · ${title} (${teacher})`;
+  return `• ${time} | ${student} · ${title} (${teacher})`;
 }
 
 // JANDI Incoming Webhook
@@ -326,6 +397,8 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "UNAUTHORIZED" });
     }
 
+nameCache.clear();
+    
     const today = kstToday();
 
     const dateLabel = new Intl.DateTimeFormat("ko-KR", {
