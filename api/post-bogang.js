@@ -140,12 +140,13 @@ async function notionRequest(path, token, options = {}) {
 
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(
-      `NOTION_API_FAILED (${response.status}): ${JSON.stringify(data)}`
-    );
-  }
-
+if (!response.ok) {
+  throw new Error(
+    `NOTION_API_FAILED (${response.status}) ` +
+    `PATH: ${path} ` +
+    `DETAIL: ${JSON.stringify(data)}`
+  );
+}
   return data;
 }
 
@@ -284,40 +285,25 @@ async function notionQuery(token) {
   return results;
 }
 
-// 보강 일정 하나를 메시지로 변환
+
 async function formatSchedule(page, token, cache) {
   const title = getTitle(page) || "제목 없음";
 
   const date = getProperty(page, "보강일")?.date;
   const time = formatTimeKST(date);
 
-  // 학생명 롤업 우선
-  let student = await getRollup(page, "학생명", token);
-
-  // 없으면 학생 관계형에서 실제 페이지 제목 조회
-  if (!student) {
-    student = await getRelationNames(
-      page, "학생", token, cache
-    );
-  }
-
-  // 선생님명 롤업 우선
-  let teacher = await getRollup(
-    page, "보강선생님명", token
+  // 코딩 학생 DB의 학생명(제목) 가져오기
+  const student = await getRelationNames(
+    page, "학생", token, cache
   );
 
-  // 없으면 보강T 관계형에서 실제 페이지 제목 조회
-  if (!teacher) {
-    teacher = await getRelationNames(
-      page, "보강T", token, cache
-    );
-  }
+  // 코딩 직원 DB의 선생님(제목) 가져오기
+  const teacher = await getRelationNames(
+    page, "보강T", token, cache
+  );
 
-  // 디버깅 로그
-  console.log("[보강 조회]", {
+  console.log("[관계형 조회]", {
     pageId: page.id,
-    studentRollupType: getProperty(page, "학생명")?.type,
-    teacherRollupType: getProperty(page, "보강선생님명")?.type,
     studentRelationCount:
       getProperty(page, "학생")?.relation?.length ?? 0,
     teacherRelationCount:
@@ -326,11 +312,17 @@ async function formatSchedule(page, token, cache) {
     teacherResolved: !!teacher,
   });
 
-  student = student || "미정";
-  teacher = teacher || "미정";
+  // 이름 누락 시 잘못된 공지를 보내지 않도록 중단
+  if (!student || !teacher) {
+    throw new Error(
+      `RELATION_NAME_UNRESOLVED: ${page.id} ` +
+      `student=${!!student}, teacher=${!!teacher}`
+    );
+  }
 
   return `• 🕒 ${time} ${student} · ${title} (${teacher})`;
 }
+
 
 // 기존 잔디 웹훅
 async function postJandi(webhookUrl, text) {
