@@ -261,17 +261,15 @@ async function formatSchedule(page, subject, token) {
   const date = getProperty(page, subject.dateProperty)?.date;
   const time = formatTimeKST(date);
 
-  let student = getRollup(page, "학생명");
-  let teacher = getRollup(page, "보강선생님명");
+// 학생명 롤업에서 이름을 직접 가져오기
+const student = getRollup(page, "학생명");
 
-  // 롤업이 없다면 관계형 속성에서 추출
-  if (!teacher) {
-    teacher = await getRelationNames(page, "보강T", token);
-  }
+// 담당 선생님
+let teacher = getRollup(page, "보강선생님명");
 
-  if (!student && subject.name !== "영어") {
-    student = await getRelationNames(page, "학생", token);
-  }
+if (!teacher) {
+  teacher = await getRelationNames(page, "보강T", token);
+}
 
   teacher = teacher || "담당 미정";
 
