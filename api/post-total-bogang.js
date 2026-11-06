@@ -309,7 +309,7 @@ export default async function handler(req, res) {
 
   try {
     const NOTION_TOKEN = process.env.NOTION_TOKEN;
-    const JANDI_WEBHOOK_URL = process.env.JANDI_WEBHOOK_URL;
+    const JANDI_WEBHOOK_URL = process.env.JANDI_TOTAL_WEBHOOK_URL;
     const CRON_SECRET = process.env.CRON_SECRET;
 
     if (!NOTION_TOKEN) {
